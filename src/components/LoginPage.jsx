@@ -7,6 +7,7 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
+import { supabase } from "../supaBaseClient";
 
 export default function LoginPage({ onLogin, onSwitchRegister }) {
   const [loading, setLoading] = useState(false);
@@ -22,33 +23,32 @@ export default function LoginPage({ onLogin, onSwitchRegister }) {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.token) {
-        // 1. Məlumatları yaddaşa yazırıq
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("user", JSON.stringify(data.user));
-
-        // 2. Uğur ekranını aktiv edirik
-        setIsSuccess(true);
-
-        // 3. 1.5 saniyə sonra ana səhifəyə (onLogin) keçid edirik
-        setTimeout(() => {
-          onLogin(data.user);
-        }, 1500);
-      } else {
-        setError(data.message || "Email və ya şifrə yanlışdır.");
+      if (error) {
+        setError(
+          error.message === "Invalid login credentials"
+            ? "Email və ya şifrə yanlışdır."
+            : error.message
+        );
+        setLoading(false);
+        return;
       }
-    } catch (error) {
+
+      // Supabase sessiyanı özü saxlayır; uyğunluq üçün user-i də yazırıq
+      localStorage.setItem("token", data.session?.access_token ?? "");
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      setIsSuccess(true);
+      setTimeout(() => {
+        onLogin(data.user);
+      }, 1500);
+    } catch (err) {
       setError("Serverlə əlaqə yaradıla bilmədi.");
-    } finally {
-      if (!isSuccess) setLoading(false);
+      setLoading(false);
     }
   };
 

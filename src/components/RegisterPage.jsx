@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import {
-  ShieldCheck,
   Loader2,
   TrendingUpDownIcon,
   CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
+import { supabase } from "../supaBaseClient";
 
 export default function RegisterPage({ onSwitchLogin }) {
   const [loading, setLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false); // Uğur vəziyyəti üçün
+  const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -18,29 +20,29 @@ export default function RegisterPage({ onSwitchLogin }) {
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
 
     try {
-      const response = await fetch("http://localhost:5000/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: { data: { name: formData.name } },
       });
 
-      const data = await response.json();
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
 
-      if (data.success) {
-        setIsSuccess(true); // Alert əvəzinə seliqəli UI göstər
-
-        // 2 saniyə sonra Logine yönəlt
+      if (data.user) {
+        setIsSuccess(true); // səliqəli UI göstər
         setTimeout(() => {
           onSwitchLogin();
         }, 2500);
-      } else {
-        alert(data.message); // Xəta mesajı hələlik qala bilər və ya bunu da stilizə edə bilərik
       }
-    } catch (error) {
-      console.error("Xəta:", error);
-    } finally {
+    } catch (err) {
+      setError("Qeydiyyat zamanı xəta baş verdi.");
       setLoading(false);
     }
   };
@@ -80,6 +82,15 @@ export default function RegisterPage({ onSwitchLogin }) {
             Enter details to create account
           </p>
         </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/5 border border-red-500/10 rounded-2xl flex items-center gap-3 animate-in slide-in-from-top-2">
+            <AlertCircle className="text-red-500" size={16} />
+            <p className="text-[11px] text-red-500 font-bold uppercase tracking-tighter">
+              {error}
+            </p>
+          </div>
+        )}
 
         <form className="space-y-4" onSubmit={handleRegister}>
           <InputGroup
