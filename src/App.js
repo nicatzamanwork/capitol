@@ -80,8 +80,8 @@ function AppContent() {
               }`}
             >
               <Routes>
-                <Route path="/" element={<Navigate to="/overview" replace />} />
-                <Route path="/overview" element={<OverviewPage />} />
+                <Route path="/" element={<Navigate to="/advisor" replace />} />
+                {/* <Route path="/overview" element={<OverviewPage />} /> */}
                 {/* <Route path="/accounts" element={<AccountsPage />} /> */}
                 <Route path="/advisor" element={<IntelligencePage />} />
                 {/* <Route path="/goals" element={<GoalsPage />} /> */}
