@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useFinancial } from "../App";
 import {
   ShieldCheck,
@@ -13,8 +14,7 @@ import {
 const MAX_DTI = 0.45;
 const TERM_MONTHS = 36;
 
-/* ── bank config (open/public tariffs only; NO api, NO partner claims) ──
-   Point each url at the bank's official consumer-loan page for best UX. */
+/* ── bank config (open/public tariffs only; NO api, NO partner claims) ── */
 const BANKS = [
   {
     key: "afb",
@@ -39,12 +39,12 @@ const BANKS = [
   },
 ];
 
-/* ── funnel analytics (Step 3) — TODO: wire to Supabase funnel_events ── */
+/* ── funnel analytics (CRA-safe) ── */
 function logEvent(eventType, metadata = {}) {
   try {
     window.__capitalTrack?.(eventType, metadata);
   } catch (_) {}
-  if (typeof import.meta !== "undefined" && import.meta.env?.DEV) {
+  if (process.env.NODE_ENV === "development") {
     // eslint-disable-next-line no-console
     console.log("[funnel]", eventType, metadata);
   }
@@ -52,13 +52,11 @@ function logEvent(eventType, metadata = {}) {
 
 const fmt = (n) => Math.round(n).toLocaleString("en-US");
 
-/* annuity monthly payment for a given principal */
 const monthlyPayment = (principal, ratePct) => {
   const r = ratePct / 100 / 12;
   return (principal * r) / (1 - Math.pow(1 + r, -TERM_MONTHS));
 };
 
-/* ── count-up (reduced-motion aware) ── */
 function CountUp({ value, duration = 1000, className = "" }) {
   const [d, setD] = React.useState(0);
   React.useEffect(() => {
@@ -103,7 +101,6 @@ const STATUS = {
   },
 };
 
-/* ── DTI zone bar ── */
 function DtiBar({ dti, color }) {
   const marker = Math.min((dti / 60) * 100, 100);
   return (
@@ -132,6 +129,7 @@ function DtiBar({ dti, color }) {
 
 export default function EligibilityPage() {
   const { financialData } = useFinancial();
+  const navigate = useNavigate();
 
   const analyzed =
     financialData?.isAnalyzed || financialData?.monthlyIncome > 0;
@@ -160,6 +158,11 @@ export default function EligibilityPage() {
 
   const s = STATUS[status];
 
+  const goAdvisor = () => {
+    logEvent("eligibility_to_advisor");
+    navigate("/advisor");
+  };
+
   const handleApply = (bank, amount) => {
     logEvent("offer_clicked", {
       bank_key: bank.key,
@@ -173,7 +176,13 @@ export default function EligibilityPage() {
   /* ── empty state: invite to the chat first ── */
   if (!analyzed) {
     return (
-      <div className="min-h-full flex flex-col items-center justify-center text-center px-6 py-24 bg-[#060708]">
+      <div
+        className="min-h-full flex flex-col items-center justify-center text-center px-6 bg-[#060708]"
+        style={{
+          paddingTop: 96,
+          paddingBottom: "calc(120px + env(safe-area-inset-bottom))",
+        }}
+      >
         <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.07] flex items-center justify-center mb-6">
           <Sparkles size={22} className="text-[#35D6A0]" />
         </div>
@@ -184,15 +193,21 @@ export default function EligibilityPage() {
           Bank təkliflərini görmək üçün AI Advisor-da gəlir və borcunuzu qeyd
           edin. 60 saniyə çəkir — bank bağlantısı tələb olunmur.
         </p>
-        <div className="flex items-center gap-2 text-[11px] font-semibold text-[#35D6A0]">
+        <button
+          onClick={goAdvisor}
+          className="flex items-center gap-2 text-[11px] font-semibold text-[#35D6A0] cursor-pointer hover:gap-3 transition-all active:scale-95 select-none bg-[#35D6A0]/[0.08] border border-[#35D6A0]/30 px-5 py-3 rounded-full"
+        >
           AI Advisor-a keç <ArrowUpRight size={14} />
-        </div>
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 md:space-y-8 pb-14 bg-[#060708] px-4 md:px-1">
+    <div
+      className="space-y-6 md:space-y-8 bg-[#060708] px-4 md:px-1"
+      style={{ paddingBottom: "calc(96px + env(safe-area-inset-bottom))" }}
+    >
       {/* header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-0 pt-2">
         <div>
@@ -336,8 +351,8 @@ export default function EligibilityPage() {
       </div>
 
       {/* privacy line */}
-      <div className="flex items-center justify-center gap-2 text-[11px] text-gray-600 pt-2">
-        <Lock size={12} />
+      <div className="flex items-center justify-center gap-2 text-[11px] text-gray-600 pt-2 text-center">
+        <Lock size={12} className="shrink-0" />
         Limitlər açıq tariflərə əsaslanan proqnozdur. Dəqiq təklifi bank öz
         saytında verir. Məlumatlarınız bizdə qalır.
       </div>

@@ -27,6 +27,9 @@ const C = {
 };
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, "JetBrains Mono", monospace';
 
+/* height reserved for the fixed mobile bottom-nav so the input never hides under it */
+const MOBILE_NAV_PAD = "calc(80px + env(safe-area-inset-bottom))";
+
 /* ── chat persistence ── */
 const CHAT_KEY = "capital_chat";
 const GREETING = {
@@ -43,7 +46,7 @@ function loadChat() {
 }
 
 /* ── responsive ── */
-function useIsMobile(bp = 640) {
+function useIsMobile(bp = 768) {
   const [m, setM] = useState(
     typeof window !== "undefined" ? window.innerWidth < bp : false
   );
@@ -98,7 +101,6 @@ const STATUS = {
 };
 
 /* ════════════ PRE-SCORING ════════════ */
-/* the questions a loan officer would ask (income & debt reused from quick flow) */
 const PRESCORE_Q = [
   {
     key: "incomeType",
@@ -268,7 +270,6 @@ const isCreditIntent = (t) => {
   );
 };
 
-/* ── rule-based Q&A ── */
 function answerFor(question, ctx) {
   if (!ctx)
     return "Əvvəlcə gəlir və borcunuzu qeyd edin, sonra suallarınızı cavablandıra bilərəm.";
@@ -326,7 +327,6 @@ function answerFor(question, ctx) {
   return `Bunu dəqiq cavablandıra bilmirəm. Kredit almaq istəyirsinizsə "kredit istəyirəm" yazın — ətraflı ön-skorinqə başlayaq. Ya da faiz, limit, DTI barədə soruşun.`;
 }
 
-/* ── count-up ── */
 function CountUp({ value, duration = 1000, style }) {
   const [d, setD] = useState(0);
   useEffect(() => {
@@ -347,7 +347,6 @@ function CountUp({ value, duration = 1000, style }) {
   return <span style={style}>{fmt(d)}</span>;
 }
 
-/* ── quick DTI result card ── */
 function ResultCard({ result, isMobile }) {
   const { dtiRatio, limit, status, reduceBy } = result;
   const s = STATUS[status];
@@ -521,7 +520,6 @@ function ResultCard({ result, isMobile }) {
   );
 }
 
-/* ── pre-scoring result card ── */
 function PrescoreCard({ data, isMobile }) {
   const { score, likelihood, eligibleLimit, requested, factors } = data;
   const lk = LIKE[likelihood];
@@ -615,7 +613,6 @@ function PrescoreCard({ data, isMobile }) {
           />
         </div>
       </div>
-
       <div style={box}>
         <div style={eyebrow}>Təxmini əlçatan limit</div>
         <div
@@ -683,8 +680,8 @@ export default function IntelligencePage() {
   const { updateFinancials } = useFinancial();
 
   const [saved] = useState(loadChat);
-  const [step, setStep] = useState(() => saved?.step ?? 1); // 1 income · 2 debt · 3 Q&A
-  const [mode, setMode] = useState(() => saved?.mode ?? "quick"); // "quick" | "prescore"
+  const [step, setStep] = useState(() => saved?.step ?? 1);
+  const [mode, setMode] = useState(() => saved?.mode ?? "quick");
   const [preIndex, setPreIndex] = useState(() => saved?.preIndex ?? 0);
   const [answers, setAnswers] = useState(() => saved?.answers ?? {});
   const [inputValue, setInputValue] = useState("");
@@ -790,7 +787,6 @@ export default function IntelligencePage() {
     }
   };
 
-  /* ── pre-scoring flow ── */
   const startPrescore = () => {
     if (!analysis) {
       addAI(
@@ -947,6 +943,8 @@ export default function IntelligencePage() {
     <div
       style={{
         width: "100%",
+        maxWidth: "100%",
+        height: "100%",
         minHeight: "100%",
         display: "flex",
         flexDirection: "column",
@@ -954,6 +952,7 @@ export default function IntelligencePage() {
         color: C.text,
         padding: pad,
         boxSizing: "border-box",
+        overflowX: "hidden",
         fontFamily: "Inter, system-ui, sans-serif",
       }}
     >
@@ -1157,6 +1156,7 @@ export default function IntelligencePage() {
         style={{
           flexShrink: 0,
           paddingTop: 16,
+          paddingBottom: isMobile ? MOBILE_NAV_PAD : 0,
           maxWidth: 760,
           margin: "0 auto",
           width: "100%",
@@ -1165,7 +1165,6 @@ export default function IntelligencePage() {
           gap: 14,
         }}
       >
-        {/* PRE-SCORING: progress + current question chips */}
         {mode === "prescore" && curQ && (
           <>
             <div
@@ -1199,7 +1198,6 @@ export default function IntelligencePage() {
           </>
         )}
 
-        {/* QUICK flow chips */}
         {mode === "quick" && step === 1 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {quickIncome.map((v) => (
@@ -1332,7 +1330,6 @@ export default function IntelligencePage() {
           </div>
         </div>
 
-        {/* footer row (quick step 3 only) */}
         {mode === "quick" && step === 3 && (
           <div
             style={{

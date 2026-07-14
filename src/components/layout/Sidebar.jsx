@@ -72,7 +72,7 @@ const Sidebar = ({ onLogout }) => {
       </nav>
 
       {/* 💻 WEBDƏ GÖRÜNƏN STANDART SİDEBAR */}
-      <aside className="hidden md:flex w-64 border-r border-white/5 flex-col p-6 bg-black min-h-screen sticky top-0">
+      <aside className="hidden md:flex w-64 flex-shrink-0 border-r border-white/5 flex-col p-6 bg-black min-h-screen sticky top-0">
         {/* Logo Hissəsi */}
         <div className="flex items-center gap-3 mb-12 px-2">
           <div className="w-2 h-2 rounded-full bg-white" />
