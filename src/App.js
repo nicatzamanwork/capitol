@@ -68,7 +68,7 @@ function AppContent() {
   const isAdvisorPage = location.pathname === "/advisor";
 
   return (
-    <div className="h-screen w-screen bg-black text-white font-sans overflow-hidden">
+    <div className="h-screen w-full bg-black text-white font-sans overflow-hidden">
       {isAuthenticated ? (
         <div className="flex flex-col md:flex-row h-full w-full overflow-hidden">
           <Sidebar onLogout={handleLogout} />

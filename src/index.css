@@ -2,12 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Üfüqi sürüşmə (horizontal scroll) qoruyucusu ── */
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* padding/border elementin enini şişirtməsin — üfüqi daşmanın ən çox səbəbi */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* uzun mətn/rəqəm ekranı yana itələməsin */
+p,
+span,
+div,
+h1,
+h2,
+h3 {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 @layer base {
+  html,
+  body {
+    /* iOS safe-area (notch) nəzərə alınsın */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
   body {
     @apply bg-black text-white antialiased;
     margin: 0;
   }
 }
+
 /* index.css daxilinə əlavə et */
 @keyframes fadeIn {
   from {
@@ -23,6 +57,7 @@
 .page-transition {
   animation: fadeIn 0.4s ease-out forwards;
 }
+
 /* Şəkillərdəki kartlar üçün xüsusi effektlər */
 @layer components {
   .card-gradient {
