@@ -23,20 +23,6 @@ const BANKS = [
     mult: 1.0,
     rate: 11.5,
   },
-  {
-    key: "respublika",
-    name: "Bank Respublika",
-    url: "https://www.bankrespublika.az/",
-    mult: 0.9,
-    rate: 13.5,
-  },
-  {
-    key: "abb",
-    name: "ABB",
-    url: "https://abb-bank.az/",
-    mult: 0.85,
-    rate: 12.0,
-  },
 ];
 
 /* ── funnel analytics (CRA-safe) ── */

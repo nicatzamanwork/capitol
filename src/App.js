@@ -15,11 +15,7 @@ import LoginPage from "./components/LoginPage";
 import LandingPage from "./components/LandingPage";
 
 // Internal Pages
-import GoalsPage from "./components/GoalsPage";
 import IntelligencePage from "./components/IntelligencePage";
-import OverviewPage from "./components/OverviewPage";
-import AccountsPage from "./components/AccountsPage";
-import DebtsPage from "./components/DebtsPage";
 import EligibilityPage from "./components/EligibilityPage";
 
 // 🚀 1. Qlobal Financial Context Yaradırıq
