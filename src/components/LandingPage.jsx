@@ -5,7 +5,7 @@ const LandingPage = ({ onStart }) => (
         <div className="w-2 h-2 bg-white rounded-full" />
       </div>
       <h2 className="text-[10px] uppercase tracking-[0.5em] font-bold">
-        CAPITAL
+        CAPITOL
       </h2>
       <p className="text-[8px] uppercase tracking-[0.2em] text-gray-500 mt-1">
         Private Intelligence

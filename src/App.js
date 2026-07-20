@@ -13,6 +13,7 @@ import Sidebar from "./components/layout/Sidebar";
 import RegisterPage from "./components/RegisterPage";
 import LoginPage from "./components/LoginPage";
 import LandingPage from "./components/LandingPage";
+import HomePage from "./components/Homepage";
 
 // Internal Pages
 import IntelligencePage from "./components/IntelligencePage";
@@ -77,7 +78,7 @@ function AppContent() {
             >
               <Routes>
                 <Route path="/" element={<Navigate to="/advisor" replace />} />
-                {/* <Route path="/overview" element={<OverviewPage />} /> */}
+                {<Route path="/overview" element={<HomePage />} />}
                 {/* <Route path="/accounts" element={<AccountsPage />} /> */}
                 <Route path="/advisor" element={<IntelligencePage />} />
                 {/* <Route path="/goals" element={<GoalsPage />} /> */}

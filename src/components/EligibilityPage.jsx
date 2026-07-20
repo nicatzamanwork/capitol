@@ -1,20 +1,26 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFinancial } from "../App";
-import {
-  ShieldCheck,
-  TriangleAlert,
-  Landmark,
-  ArrowUpRight,
-  Lock,
-  Sparkles,
-} from "lucide-react";
+import { ShieldCheck, Landmark, ArrowUpRight, Sparkles } from "lucide-react";
 
-/* ── shared assumptions (mirror IntelligencePage) ── */
-const MAX_DTI = 0.45;
-const TERM_MONTHS = 36;
+/* ── tokens ── */
+const C = {
+  bg: "#060708",
+  surface: "#0F1113",
+  line: "rgba(255,255,255,.07)",
+  dim: "#868B94",
+  faint: "#4C525B",
+  green: "#35D6A0",
+  amber: "#E7B24C",
+  red: "#F26D6D",
+};
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, "JetBrains Mono", monospace';
+const MOBILE_NAV_PAD = "calc(96px + env(safe-area-inset-bottom))";
 
-/* ── bank config (open/public tariffs only; NO api, NO partner claims) ── */
+const MAX_DTI = 0.45,
+  TERM_MONTHS = 36;
+
+/* açıq tarif banklar (referral — partnyorluq iddiası yoxdur) */
 const BANKS = [
   {
     key: "afb",
@@ -23,27 +29,37 @@ const BANKS = [
     mult: 1.0,
     rate: 11.5,
   },
+  {
+    key: "respublika",
+    name: "Bank Respublika",
+    url: "https://www.bankrespublika.az/",
+    mult: 0.9,
+    rate: 13.5,
+  },
+  {
+    key: "abb",
+    name: "ABB",
+    url: "https://abb-bank.az/",
+    mult: 0.85,
+    rate: 12.0,
+  },
 ];
 
-/* ── funnel analytics (CRA-safe) ── */
-function logEvent(eventType, metadata = {}) {
-  try {
-    window.__capitalTrack?.(eventType, metadata);
-  } catch (_) {}
-  if (process.env.NODE_ENV === "development") {
-    // eslint-disable-next-line no-console
-    console.log("[funnel]", eventType, metadata);
-  }
-}
-
 const fmt = (n) => Math.round(n).toLocaleString("en-US");
-
-const monthlyPayment = (principal, ratePct) => {
+const monthlyPayment = (p, ratePct) => {
   const r = ratePct / 100 / 12;
-  return (principal * r) / (1 - Math.pow(1 + r, -TERM_MONTHS));
+  return (p * r) / (1 - Math.pow(1 + r, -TERM_MONTHS));
 };
 
-function CountUp({ value, duration = 1000, className = "" }) {
+function logEvent(type, meta = {}) {
+  try {
+    window.__capitalTrack?.(type, meta);
+  } catch (_) {}
+  if (process.env.NODE_ENV === "development")
+    console.log("[funnel]", type, meta);
+}
+
+function CountUp({ value, duration = 1000, style }) {
   const [d, setD] = React.useState(0);
   React.useEffect(() => {
     if (window.matchMedia?.("(prefers-reduced-motion:reduce)").matches) {
@@ -60,69 +76,37 @@ function CountUp({ value, duration = 1000, className = "" }) {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
-  return <span className={className}>{fmt(d)}</span>;
+  return <span style={style}>{fmt(d)}</span>;
 }
 
 const STATUS = {
-  healthy: {
-    label: "Sağlam",
-    color: "#35D6A0",
-    Icon: ShieldCheck,
-    pill: "Verified Profile",
-    prob: "Yüksək təsdiq ehtimalı",
-  },
-  watch: {
-    label: "Diqqətli",
-    color: "#E7B24C",
-    Icon: TriangleAlert,
-    pill: "Watch Profile",
-    prob: "Orta təsdiq ehtimalı",
-  },
-  critical: {
-    label: "Yüksək risk",
-    color: "#F26D6D",
-    Icon: TriangleAlert,
-    pill: "High Risk Profile",
-    prob: "Aşağı təsdiq ehtimalı",
-  },
+  healthy: { label: "Sağlam", color: C.green },
+  watch: { label: "Diqqətli", color: C.amber },
+  critical: { label: "Yüksək risk", color: C.red },
 };
 
-function DtiBar({ dti, color }) {
-  const marker = Math.min((dti / 60) * 100, 100);
-  return (
-    <div className="mt-6">
-      <div className="relative h-2 rounded-full overflow-hidden flex">
-        <div style={{ width: "50%", background: "#35D6A033" }} />
-        <div style={{ width: "25%", background: "#E7B24C33" }} />
-        <div style={{ width: "25%", background: "#F26D6D33" }} />
-        <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-black transition-[left] duration-1000"
-          style={{
-            left: `calc(${marker}% - 6px)`,
-            background: color,
-            boxShadow: `0 0 10px ${color}`,
-          }}
-        />
-      </div>
-      <div className="flex justify-between mt-2 text-[9px] uppercase tracking-wider text-gray-600 font-bold">
-        <span>0%</span>
-        <span style={{ color: "#E7B24C" }}>bank həddi 45%</span>
-        <span>60%</span>
-      </div>
-    </div>
+function useIsMobile(bp = 768) {
+  const [m, setM] = React.useState(
+    typeof window !== "undefined" ? window.innerWidth < bp : false
   );
+  React.useEffect(() => {
+    const on = () => setM(window.innerWidth < bp);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, [bp]);
+  return m;
 }
 
 export default function EligibilityPage() {
   const { financialData } = useFinancial();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
-  const analyzed =
-    financialData?.isAnalyzed || financialData?.monthlyIncome > 0;
   const income = financialData?.monthlyIncome ?? 0;
   const debt = financialData?.monthlyDebtPayments ?? 0;
+  const analyzed = income > 0;
 
-  const { dti, baseLimit, status, reduceBy } = useMemo(() => {
+  const { dti, baseLimit, status } = useMemo(() => {
     const dtiRatio = income > 0 ? Math.round((debt / income) * 100) : 0;
     const maxPayment = income * MAX_DTI - debt;
     const r = 0.14 / 12;
@@ -132,218 +116,505 @@ export default function EligibilityPage() {
     let st = "healthy";
     if (dtiRatio > 45) st = "critical";
     else if (dtiRatio > 30) st = "watch";
-    const reduce =
-      maxPayment < 0 ? Math.ceil((debt - income * MAX_DTI) / 10) * 10 : 0;
     return {
       dti: dtiRatio,
       baseLimit: financialData?.computedLimit ?? limit,
       status: st,
-      reduceBy: reduce,
     };
   }, [income, debt, financialData]);
 
   const s = STATUS[status];
 
-  const goAdvisor = () => {
-    logEvent("eligibility_to_advisor");
-    navigate("/advisor");
-  };
+  /* təkliflər: məbləğə görə sırala, birincisi = ən uyğun */
+  const offers = useMemo(() => {
+    return BANKS.map((b) => ({
+      ...b,
+      amount: Math.round((baseLimit * b.mult) / 100) * 100,
+    }))
+      .filter((b) => b.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+  }, [baseLimit]);
 
-  const handleApply = (bank, amount) => {
+  const openBank = (bank) => {
     logEvent("offer_clicked", {
       bank_key: bank.key,
-      amount,
+      amount: bank.amount,
       dti,
       limit: baseLimit,
     });
     window.open(bank.url, "_blank", "noopener,noreferrer");
   };
 
-  /* ── empty state: invite to the chat first ── */
+  const card = {
+    background: C.surface,
+    border: `1px solid ${C.line}`,
+    borderRadius: 22,
+  };
+  const eyebrow = {
+    fontSize: 9.5,
+    letterSpacing: ".2em",
+    textTransform: "uppercase",
+    color: C.faint,
+    fontWeight: 700,
+  };
+
+  /* ── boş hal ── */
   if (!analyzed) {
     return (
       <div
-        className="min-h-full flex flex-col items-center justify-center text-center px-6 bg-[#060708]"
         style={{
-          paddingTop: 96,
-          paddingBottom: "calc(120px + env(safe-area-inset-bottom))",
+          minHeight: "100%",
+          background: C.bg,
+          color: "#fff",
+          boxSizing: "border-box",
+          fontFamily: "Inter, system-ui, sans-serif",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          padding: "24px",
+          paddingBottom: isMobile ? MOBILE_NAV_PAD : 24,
         }}
       >
-        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.07] flex items-center justify-center mb-6">
-          <Sparkles size={22} className="text-[#35D6A0]" />
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 18,
+            background: "rgba(255,255,255,.03)",
+            border: `1px solid ${C.line}`,
+            display: "grid",
+            placeItems: "center",
+            marginBottom: 20,
+          }}
+        >
+          <Sparkles size={22} style={{ color: C.green }} />
         </div>
-        <h1 className="text-3xl font-semibold text-white tracking-tight mb-3">
+        <h1
+          style={{
+            fontSize: 26,
+            fontWeight: 600,
+            margin: "0 0 10px",
+            letterSpacing: "-.02em",
+          }}
+        >
           Əvvəlcə profilinizi quraq
         </h1>
-        <p className="text-sm text-gray-500 max-w-sm leading-relaxed mb-8">
+        <p
+          style={{
+            fontSize: 14,
+            color: C.dim,
+            maxWidth: 340,
+            lineHeight: 1.6,
+            margin: "0 0 24px",
+          }}
+        >
           Bank təkliflərini görmək üçün AI Advisor-da gəlir və borcunuzu qeyd
-          edin. 60 saniyə çəkir — bank bağlantısı tələb olunmur.
+          edin.
         </p>
         <button
-          onClick={goAdvisor}
-          className="flex items-center gap-2 text-[11px] font-semibold text-[#35D6A0] cursor-pointer hover:gap-3 transition-all active:scale-95 select-none bg-[#35D6A0]/[0.08] border border-[#35D6A0]/30 px-5 py-3 rounded-full"
+          onClick={() => navigate("/advisor")}
+          style={{
+            background: "#fff",
+            color: "#000",
+            border: "none",
+            padding: "14px 28px",
+            borderRadius: 999,
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
         >
-          AI Advisor-a keç <ArrowUpRight size={14} />
+          Advisor-a keç <ArrowUpRight size={16} />
         </button>
       </div>
     );
   }
 
+  const best = offers[0];
+  const rest = offers.slice(1);
+  const dtiMarker = Math.min((dti / 60) * 100, 100);
+
   return (
     <div
-      className="space-y-6 md:space-y-8 bg-[#060708] px-4 md:px-1"
-      style={{ paddingBottom: "calc(96px + env(safe-area-inset-bottom))" }}
+      style={{
+        minHeight: "100%",
+        background: C.bg,
+        color: "#fff",
+        boxSizing: "border-box",
+        overflowX: "hidden",
+        fontFamily: "Inter, system-ui, sans-serif",
+        padding: isMobile ? "20px 16px" : "32px 24px",
+        paddingBottom: isMobile ? MOBILE_NAV_PAD : 32,
+      }}
     >
-      {/* header */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-0 pt-2">
-        <div>
-          <h2 className="text-[10px] uppercase tracking-[0.28em] text-gray-600 font-bold mb-1">
-            Eligibility
-          </h2>
-          <h1 className="text-2xl md:text-3xl font-semibold text-white tracking-tight">
-            Credit Eligibility
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Açıq bank tariflərinə əsaslanan şəxsi təkliflər.
-          </p>
-        </div>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        {/* header */}
         <div
-          className="px-4 py-2 rounded-full border flex items-center gap-2 shrink-0 self-start"
           style={{
-            background: `${s.color}1A`,
-            borderColor: `${s.color}33`,
-            color: s.color,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: 20,
           }}
         >
-          <span
-            className="w-2 h-2 rounded-full animate-pulse"
-            style={{ background: s.color }}
-          />
-          <span className="text-[10px] font-bold uppercase tracking-widest">
-            {s.pill}
-          </span>
-        </div>
-      </div>
-
-      {/* hero card */}
-      <div className="bg-[#0F1113] border border-white/[0.07] rounded-[32px] p-8 md:p-10">
-        <div className="flex flex-col md:flex-row justify-between gap-8">
-          <div className="max-w-md space-y-4">
-            <p className="text-[10px] uppercase tracking-[0.25em] text-gray-600 font-bold">
-              Debt-to-income status
-            </p>
-            <div className="flex items-center gap-3">
-              <h2
-                className="text-5xl font-semibold tracking-tight"
-                style={{ color: status === "critical" ? "#F26D6D" : "#fff" }}
-              >
-                {s.label}
-              </h2>
-              <s.Icon size={26} style={{ color: s.color }} />
-            </div>
-            {status === "critical" ? (
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Aylıq borcunuz gəlirinizin {dti}%-nə çatıb — bank həddi olan
-                45%-i keçir. Aylıq borcunuzu təxminən{" "}
-                <span className="text-white font-mono">{fmt(reduceBy)} ₼</span>{" "}
-                azaltsanız, təkliflər açılır.
-              </p>
-            ) : (
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Aylıq borcunuz gəlirinizin {dti}%-ni təşkil edir.{" "}
-                {status === "healthy"
-                  ? "Yeni kredit üçün optimaldır."
-                  : "Kredit mümkündür, amma limit məhduddur."}
-              </p>
-            )}
-            <DtiBar dti={dti} color={s.color} />
-          </div>
-
-          <div className="text-left md:text-right shrink-0">
-            <p className="text-[10px] uppercase tracking-[0.25em] text-gray-600 font-bold mb-2">
-              Calculated limit
-            </p>
-            <p className="font-mono tabular-nums text-4xl md:text-5xl font-semibold text-white tracking-tight">
-              <span className="text-gray-500 text-2xl font-sans">~</span>
-              <CountUp value={baseLimit} />{" "}
-              <span className="text-2xl text-gray-500">₼</span>
-            </p>
-            <div
-              className="mt-4 flex items-center gap-2 md:justify-end text-xs font-medium"
-              style={{ color: s.color }}
-            >
-              <ShieldCheck size={14} /> {s.prob}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* offers */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {BANKS.map((bank, i) => {
-          const amount = Math.round((baseLimit * bank.mult) / 100) * 100;
-          const disabled = amount <= 0;
-          const pay = disabled ? 0 : monthlyPayment(amount, bank.rate);
-          return (
-            <div
-              key={bank.key}
-              className="bg-[#0F1113] border border-white/[0.07] rounded-3xl p-6 md:p-7 flex flex-col justify-between min-h-[260px] md:min-h-[300px] transition-all hover:-translate-y-1 hover:border-white/20 group"
+          <div>
+            <div style={{ ...eyebrow, marginBottom: 6 }}>Eligibility</div>
+            <h1
               style={{
-                animation: `rise .5s cubic-bezier(.22,.61,.36,1) both`,
-                animationDelay: `${i * 70}ms`,
+                fontSize: isMobile ? 26 : 30,
+                fontWeight: 700,
+                margin: 0,
+                letterSpacing: "-.02em",
               }}
             >
-              <div>
-                <div className="flex justify-between items-center mb-6 md:mb-8">
-                  <div className="p-3 bg-white/5 rounded-2xl text-gray-400 group-hover:text-white transition-colors">
-                    <Landmark size={20} />
-                  </div>
-                  <span className="text-[9px] uppercase font-bold text-gray-600 tracking-widest">
-                    Açıq tarif
-                  </span>
-                </div>
-                <h4 className="text-white font-medium mb-4">{bank.name}</h4>
-                <p className="font-mono tabular-nums text-3xl font-semibold text-white tracking-tight">
-                  {disabled ? "0" : fmt(amount)}{" "}
-                  <span className="text-lg text-gray-500">₼</span>
-                </p>
-                <p className="text-xs text-gray-500 mt-2">
-                  Faiz: <span className="font-mono">{bank.rate}%</span>-dən
-                  (açıq tarif)
-                </p>
-                {!disabled && (
-                  <p className="text-[11px] text-gray-600 mt-1 font-mono tabular-nums">
-                    ~{fmt(pay)} ₼/ay · {TERM_MONTHS} ay
-                  </p>
-                )}
+              Təklifləriniz
+            </h1>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "7px 13px",
+              borderRadius: 999,
+              border: `1px solid ${C.green}33`,
+              background: C.green + "12",
+              flexShrink: 0,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 999,
+                background: C.green,
+              }}
+            />
+            <span
+              style={{
+                fontSize: 10,
+                color: C.green,
+                fontWeight: 700,
+                letterSpacing: ".12em",
+                textTransform: "uppercase",
+              }}
+            >
+              Yoxlanılıb
+            </span>
+          </div>
+        </div>
+
+        {/* DTI card */}
+        <div style={{ ...card, padding: isMobile ? 20 : 24, marginBottom: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <div style={eyebrow}>Borc / gəlir (DTI)</div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 16,
+                fontWeight: 600,
+                color: s.color,
+              }}
+            >
+              {s.label} <ShieldCheck size={16} />
+            </div>
+          </div>
+          <p
+            style={{
+              fontSize: 13.5,
+              color: C.dim,
+              lineHeight: 1.55,
+              margin: "0 0 18px",
+            }}
+          >
+            {status === "healthy" &&
+              `Aylıq borcunuz gəlirinizin ${dti}%-ni təşkil edir — yeni kredit üçün optimal.`}
+            {status === "watch" &&
+              `Aylıq borcunuz gəlirinizin ${dti}%-ni təşkil edir — 45% həddinə yaxınsınız.`}
+            {status === "critical" &&
+              `Aylıq borcunuz gəlirinizin ${dti}%-ni təşkil edir — 45% bank həddini keçir.`}
+          </p>
+          <div
+            style={{
+              position: "relative",
+              height: 8,
+              borderRadius: 999,
+              background:
+                "linear-gradient(90deg, #35D6A0 0%, #E7B24C 62%, #F26D6D 100%)",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: `calc(${dtiMarker}% - 7px)`,
+                transform: "translateY(-50%)",
+                width: 14,
+                height: 14,
+                borderRadius: 999,
+                background: "#fff",
+                border: "2px solid #000",
+                boxShadow: "0 0 8px rgba(0,0,0,.6)",
+                transition: "left 1s cubic-bezier(.22,.61,.36,1)",
+              }}
+            />
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginTop: 8,
+              fontSize: 9.5,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              color: C.faint,
+              fontWeight: 700,
+            }}
+          >
+            <span>0%</span>
+            <span style={{ color: C.amber }}>bank həddi 45%</span>
+            <span>60%</span>
+          </div>
+        </div>
+
+        {/* BEST MATCH */}
+        {best && (
+          <div
+            style={{
+              ...card,
+              padding: isMobile ? 22 : 26,
+              marginBottom: 12,
+              border: `1px solid ${C.green}44`,
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: -30,
+                right: -30,
+                width: 150,
+                height: 150,
+                background: `radial-gradient(circle, ${C.green}18, transparent 70%)`,
+                pointerEvents: "none",
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 18,
+                position: "relative",
+              }}
+            >
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  background: "rgba(255,255,255,.05)",
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <Landmark size={20} style={{ color: "#fff" }} />
               </div>
-              <div>
-                <button
-                  onClick={() => handleApply(bank, amount)}
-                  disabled={disabled}
-                  className="w-full bg-white text-black py-3.5 rounded-2xl text-[11px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-gray-200 transition-all active:scale-[0.98] disabled:opacity-20 disabled:cursor-not-allowed"
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  background: C.green + "1A",
+                  border: `1px solid ${C.green}33`,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: C.green,
+                    fontWeight: 700,
+                    letterSpacing: ".1em",
+                    textTransform: "uppercase",
+                  }}
                 >
-                  Rəsmi sayta keç <ArrowUpRight size={14} />
-                </button>
-                {!disabled && (
-                  <p className="text-[10px] text-gray-600 text-center mt-2">
-                    Sizi {bank.name}-ın rəsmi səhifəsinə yönləndirir
-                  </p>
-                )}
+                  Ən uyğun
+                </span>
               </div>
             </div>
-          );
-        })}
+            <h3
+              style={{
+                fontSize: 18,
+                fontWeight: 600,
+                margin: "0 0 10px",
+                position: "relative",
+              }}
+            >
+              {best.name}
+            </h3>
+            <div
+              style={{
+                fontFamily: MONO,
+                fontVariantNumeric: "tabular-nums",
+                fontSize: isMobile ? 34 : 40,
+                fontWeight: 700,
+                color: "#fff",
+                lineHeight: 1,
+                marginBottom: 8,
+                position: "relative",
+              }}
+            >
+              <CountUp value={best.amount} />{" "}
+              <span style={{ fontSize: 20, color: C.dim }}>₼</span>
+            </div>
+            <p
+              style={{
+                fontSize: 13,
+                color: C.dim,
+                margin: "0 0 18px",
+                fontFamily: MONO,
+                position: "relative",
+              }}
+            >
+              {best.rate}%-dən · ~{fmt(monthlyPayment(best.amount, best.rate))}{" "}
+              ₼/ay · {TERM_MONTHS} ay
+            </p>
+            <button
+              onClick={() => openBank(best)}
+              style={{
+                width: "100%",
+                background: "#ECE9E2",
+                color: "#161616",
+                border: "none",
+                padding: "15px",
+                borderRadius: 16,
+                fontSize: 12.5,
+                fontWeight: 700,
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                position: "relative",
+              }}
+            >
+              Rəsmi sayta keç <ArrowUpRight size={15} />
+            </button>
+          </div>
+        )}
+
+        {/* digər təkliflər */}
+        {rest.map((b, i) => (
+          <button
+            key={b.key}
+            onClick={() => openBank(b)}
+            style={{
+              ...card,
+              width: "100%",
+              padding: isMobile ? "16px 18px" : "18px 22px",
+              marginBottom: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              cursor: "pointer",
+              textAlign: "left",
+              animation: `rise .4s ${i * 60}ms both`,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                minWidth: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  background: "rgba(255,255,255,.05)",
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Landmark size={18} style={{ color: C.dim }} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: "#fff",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {b.name}
+                </div>
+                <div style={{ fontSize: 12, color: C.faint }}>
+                  {b.rate}%-dən
+                </div>
+              </div>
+            </div>
+            <div
+              style={{
+                fontFamily: MONO,
+                fontVariantNumeric: "tabular-nums",
+                fontSize: isMobile ? 20 : 24,
+                fontWeight: 700,
+                color: "#fff",
+                flexShrink: 0,
+              }}
+            >
+              {fmt(b.amount)}{" "}
+              <span style={{ fontSize: 13, color: C.dim }}>₼</span>
+            </div>
+          </button>
+        ))}
+
+        {/* disclaimer */}
+        <p
+          style={{
+            fontSize: 11.5,
+            color: C.faint,
+            textAlign: "center",
+            lineHeight: 1.5,
+            marginTop: 18,
+            maxWidth: 380,
+            marginLeft: "auto",
+            marginRight: "auto",
+          }}
+        >
+          Rəqəmlər açıq tariflərə əsaslanan proqnozdur. Dəqiq təklifi bank öz
+          saytında təsdiqləyir.
+        </p>
       </div>
 
-      {/* privacy line */}
-      <div className="flex items-center justify-center gap-2 text-[11px] text-gray-600 pt-2 text-center">
-        <Lock size={12} className="shrink-0" />
-        Limitlər açıq tariflərə əsaslanan proqnozdur. Dəqiq təklifi bank öz
-        saytında verir. Məlumatlarınız bizdə qalır.
-      </div>
-
-      <style>{`@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+      <style>{`@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         @media (prefers-reduced-motion:reduce){[style*="rise"]{animation:none!important;opacity:1!important;transform:none!important}}`}</style>
     </div>
   );
