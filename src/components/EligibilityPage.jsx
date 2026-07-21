@@ -1,34 +1,76 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFinancial } from "../App";
-import { ShieldCheck, Landmark, ArrowUpRight, Sparkles } from "lucide-react";
+import {
+  ShieldCheck,
+  Landmark,
+  ArrowUpRight,
+  Sparkles,
+  Info,
+} from "lucide-react";
 
 /* ── tokens ── */
 const C = {
   bg: "#060708",
   surface: "#0F1113",
   line: "rgba(255,255,255,.07)",
-  dim: "#868B94",
-  faint: "#4C525B",
+  dim: "#B0B6BF",
+  faint: "#858B94",
   green: "#35D6A0",
   amber: "#E7B24C",
   red: "#F26D6D",
 };
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, "JetBrains Mono", monospace';
 const MOBILE_NAV_PAD = "calc(96px + env(safe-area-inset-bottom))";
-
 const MAX_DTI = 0.45,
   TERM_MONTHS = 36;
 
-/* açıq tarif banklar (referral — partnyorluq iddiası yoxdur) */
+/* ══════════════════════════════════════════════════════════════
+   BANK PAVİLYONU — TÖVSİYƏ / AÇIQ TARİF MODELİ
+   ──────────────────────────────────────────────────────────────
+   QAYDA: "rate" YALNIZ bankın RƏSMİ saytında dərc olunmuş real,
+   cari illik faiz olmalıdır. Bilmədiyin faizi UYDURMA — rate: null
+   qoy, sistem onu "Açıq tarif — sayta keçin" kimi göstərəcək.
+   Yeni bank əlavə etmək = sadəcə bu siyahıya bir sətir.
+   ════════════════════════════════════════════════════════════ */
 const BANKS = [
   {
     key: "afb",
     name: "AFB Bank",
-    url: "https://afb.az/",
-    mult: 1.0,
-    rate: 11.5,
+    url: "https://afb.az/nagd-pul-krediti",
+    rate: 10.5,
+  }, // afb.az — nağd kredit
+  {
+    key: "abb",
+    name: "ABB",
+    url: "https://abb-bank.az/ferdi/kreditler/nagd-kredit",
+    rate: 10.9,
+  }, // abb-bank.az — nağd kredit
+  {
+    key: "leobank",
+    name: "Leobank",
+    url: "https://leobank.az/az/cash",
+    rate: 15.0,
+  }, // leobank.az — nağd kredit
+
+  /* Faizi təsdiqlənməyənlər (rate: null → "Açıq tarif — sayta baxın"). Real faizi yoxlayıb yaz: */
+  {
+    key: "turanbank",
+    name: "Turanbank",
+    url: "https://www.turanbank.az/az/pages/22/246",
+    rate: null,
   },
+  {
+    key: "respublika",
+    name: "Bank Respublika",
+    url: "https://www.bankrespublika.az/",
+    rate: null,
+  },
+
+  /* Əlavə etmək üçün (real açıq faizlə doldur, şərhi götür): */
+  // { key: "kapital", name: "Kapital Bank", url: "https://www.kapitalbank.az/", rate: null },
+  // { key: "pasha", name: "PAŞA Bank", url: "https://www.pashabank.az/", rate: null },
+  // { key: "unibank", name: "Unibank", url: "https://www.unibank.az/", rate: null },
 ];
 
 const fmt = (n) => Math.round(n).toLocaleString("en-US");
@@ -92,41 +134,39 @@ export default function EligibilityPage() {
   const debt = financialData?.monthlyDebtPayments ?? 0;
   const analyzed = income > 0;
 
-  const { dti, baseLimit, status } = useMemo(() => {
+  const { dti, limit, status } = useMemo(() => {
     const dtiRatio = income > 0 ? Math.round((debt / income) * 100) : 0;
     const maxPayment = income * MAX_DTI - debt;
     const r = 0.14 / 12;
     const pv = (1 - Math.pow(1 + r, -TERM_MONTHS)) / r;
-    const limit =
-      maxPayment > 0 ? Math.round((maxPayment * pv) / 100) * 100 : 0;
+    const lim = maxPayment > 0 ? Math.round((maxPayment * pv) / 100) * 100 : 0;
     let st = "healthy";
     if (dtiRatio > 45) st = "critical";
     else if (dtiRatio > 30) st = "watch";
     return {
       dti: dtiRatio,
-      baseLimit: financialData?.computedLimit ?? limit,
+      limit: financialData?.computedLimit ?? lim,
       status: st,
     };
   }, [income, debt, financialData]);
 
   const s = STATUS[status];
 
-  /* təkliflər: məbləğə görə sırala, birincisi = ən uyğun */
-  const offers = useMemo(() => {
-    return BANKS.map((b) => ({
-      ...b,
-      amount: Math.round((baseLimit * b.mult) / 100) * 100,
-    }))
-      .filter((b) => b.amount > 0)
-      .sort((a, b) => b.amount - a.amount);
-  }, [baseLimit]);
+  /* faizi bilinən banklar əvvəl (aşağı faiz = daha sərfəli), bilinməyənlər sonra */
+  const ranked = useMemo(() => {
+    const known = BANKS.filter((b) => typeof b.rate === "number").sort(
+      (a, b) => a.rate - b.rate
+    );
+    const unknown = BANKS.filter((b) => typeof b.rate !== "number");
+    return [...known, ...unknown];
+  }, []);
 
   const openBank = (bank) => {
     logEvent("offer_clicked", {
       bank_key: bank.key,
-      amount: bank.amount,
+      rate: bank.rate,
       dti,
-      limit: baseLimit,
+      limit,
     });
     window.open(bank.url, "_blank", "noopener,noreferrer");
   };
@@ -221,9 +261,216 @@ export default function EligibilityPage() {
     );
   }
 
-  const best = offers[0];
-  const rest = offers.slice(1);
+  const known = ranked.filter((b) => typeof b.rate === "number");
+  const unknown = ranked.filter((b) => typeof b.rate !== "number");
   const dtiMarker = Math.min((dti / 60) * 100, 100);
+
+  /* faizi bilinən bank — tam kart (AFB kimi izahlı) */
+  const BankCard = ({ b, isBest }) => (
+    <div
+      style={{
+        ...card,
+        padding: isMobile ? 22 : 26,
+        marginBottom: 12,
+        border: `1px solid ${isBest ? C.green + "44" : C.line}`,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {isBest && (
+        <div
+          style={{
+            position: "absolute",
+            top: -30,
+            right: -30,
+            width: 150,
+            height: 150,
+            background: `radial-gradient(circle, ${C.green}18, transparent 70%)`,
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 18,
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            background: "rgba(255,255,255,.05)",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <Landmark size={20} style={{ color: "#fff" }} />
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 12px",
+            borderRadius: 999,
+            background: isBest ? C.green + "1A" : "rgba(255,255,255,.03)",
+            border: `1px solid ${isBest ? C.green + "33" : C.line}`,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 10,
+              color: isBest ? C.green : C.dim,
+              fontWeight: 700,
+              letterSpacing: ".1em",
+              textTransform: "uppercase",
+            }}
+          >
+            {isBest ? "Ən sərfəli faiz" : "Açıq tarif"}
+          </span>
+        </div>
+      </div>
+      <h3
+        style={{
+          fontSize: 18,
+          fontWeight: 600,
+          margin: "0 0 6px",
+          position: "relative",
+        }}
+      >
+        {b.name}
+      </h3>
+      <div
+        style={{
+          fontFamily: MONO,
+          fontVariantNumeric: "tabular-nums",
+          fontSize: isMobile ? 30 : 36,
+          fontWeight: 700,
+          color: "#fff",
+          lineHeight: 1,
+          marginBottom: 6,
+          position: "relative",
+        }}
+      >
+        {b.rate}
+        <span style={{ fontSize: 20, color: C.dim }}>%</span>{" "}
+        <span style={{ fontSize: 14, color: C.faint, fontWeight: 400 }}>
+          illik, açıq tarif · ən aşağı hədd
+        </span>
+      </div>
+      <p
+        style={{
+          fontSize: 13,
+          color: C.dim,
+          margin: "0 0 4px",
+          lineHeight: 1.55,
+          position: "relative",
+        }}
+      >
+        Əgər bank sizə <b style={{ color: "#fff" }}>~{fmt(limit)} ₼</b>-i{" "}
+        <b style={{ color: "#fff" }}>{b.rate}%</b> ilə uyğun görsə, aylıq
+        ödənişiniz təxminən{" "}
+        <b style={{ color: C.green, fontFamily: MONO }}>
+          ~{fmt(monthlyPayment(limit, b.rate))} ₼
+        </b>{" "}
+        olar ({TERM_MONTHS} ay üzrə).
+      </p>
+      <p
+        style={{
+          fontSize: 11,
+          color: C.faint,
+          margin: "0 0 18px",
+          position: "relative",
+        }}
+      >
+        Bu, ehtimaldır — real faiz və məbləği bank sizin profilinizə görə təyin
+        edir.
+      </p>
+      <button
+        onClick={() => openBank(b)}
+        style={{
+          width: "100%",
+          background: "#ECE9E2",
+          color: "#161616",
+          border: "none",
+          padding: "15px",
+          borderRadius: 16,
+          fontSize: 12.5,
+          fontWeight: 700,
+          letterSpacing: ".08em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          position: "relative",
+        }}
+      >
+        Rəsmi sayta keç <ArrowUpRight size={15} />
+      </button>
+    </div>
+  );
+
+  /* faizi bilinməyən bank — sadə sətir */
+  const BankRow = ({ b }) => (
+    <button
+      onClick={() => openBank(b)}
+      style={{
+        ...card,
+        width: "100%",
+        padding: isMobile ? "16px 18px" : "18px 22px",
+        marginBottom: 10,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        cursor: "pointer",
+        textAlign: "left",
+      }}
+    >
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}
+      >
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 12,
+            background: "rgba(255,255,255,.05)",
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Landmark size={18} style={{ color: C.dim }} />
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 600,
+              color: "#fff",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {b.name}
+          </div>
+          <div style={{ fontSize: 12, color: C.faint }}>
+            Açıq tarif — sayta baxın
+          </div>
+        </div>
+      </div>
+      <ArrowUpRight size={18} style={{ color: C.dim }} />
+    </button>
+  );
 
   return (
     <div
@@ -258,7 +505,7 @@ export default function EligibilityPage() {
                 letterSpacing: "-.02em",
               }}
             >
-              Təklifləriniz
+              Bank təklifləri
             </h1>
           </div>
           <div
@@ -268,72 +515,70 @@ export default function EligibilityPage() {
               gap: 7,
               padding: "7px 13px",
               borderRadius: 999,
-              border: `1px solid ${C.green}33`,
-              background: C.green + "12",
+              border: `1px solid ${C.line}`,
+              background: "rgba(255,255,255,.02)",
               flexShrink: 0,
             }}
           >
             <span
               style={{
-                width: 6,
-                height: 6,
-                borderRadius: 999,
-                background: C.green,
-              }}
-            />
-            <span
-              style={{
                 fontSize: 10,
-                color: C.green,
+                color: C.dim,
                 fontWeight: 700,
-                letterSpacing: ".12em",
+                letterSpacing: ".1em",
                 textTransform: "uppercase",
               }}
             >
-              Yoxlanılıb
+              Açıq tarif · tövsiyə
             </span>
           </div>
         </div>
 
-        {/* DTI card */}
+        {/* DTI + təxmini limit card */}
         <div style={{ ...card, padding: isMobile ? 20 : 24, marginBottom: 12 }}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 12,
+              alignItems: "flex-start",
+              marginBottom: 16,
+              gap: 12,
             }}
           >
-            <div style={eyebrow}>Borc / gəlir (DTI)</div>
+            <div>
+              <div style={{ ...eyebrow, marginBottom: 6 }}>
+                Təxmini götürə biləcəyiniz
+              </div>
+              <div
+                style={{
+                  fontFamily: MONO,
+                  fontVariantNumeric: "tabular-nums",
+                  fontSize: isMobile ? 32 : 40,
+                  fontWeight: 700,
+                  color: C.green,
+                  lineHeight: 1,
+                }}
+              >
+                <CountUp value={limit} />{" "}
+                <span style={{ fontSize: isMobile ? 18 : 22, color: C.dim }}>
+                  ₼
+                </span>
+              </div>
+            </div>
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: 600,
                 color: s.color,
+                flexShrink: 0,
               }}
             >
-              {s.label} <ShieldCheck size={16} />
+              {s.label} <ShieldCheck size={15} />
             </div>
           </div>
-          <p
-            style={{
-              fontSize: 13.5,
-              color: C.dim,
-              lineHeight: 1.55,
-              margin: "0 0 18px",
-            }}
-          >
-            {status === "healthy" &&
-              `Aylıq borcunuz gəlirinizin ${dti}%-ni təşkil edir — yeni kredit üçün optimal.`}
-            {status === "watch" &&
-              `Aylıq borcunuz gəlirinizin ${dti}%-ni təşkil edir — 45% həddinə yaxınsınız.`}
-            {status === "critical" &&
-              `Aylıq borcunuz gəlirinizin ${dti}%-ni təşkil edir — 45% bank həddini keçir.`}
-          </p>
           <div
             style={{
               position: "relative",
@@ -371,237 +616,80 @@ export default function EligibilityPage() {
               fontWeight: 700,
             }}
           >
-            <span>0%</span>
+            <span>DTI {dti}%</span>
             <span style={{ color: C.amber }}>bank həddi 45%</span>
             <span>60%</span>
           </div>
-        </div>
 
-        {/* BEST MATCH */}
-        {best && (
+          {/* bildiriş — tövsiyə/açıq data modeli */}
           <div
             style={{
-              ...card,
-              padding: isMobile ? 22 : 26,
-              marginBottom: 12,
-              border: `1px solid ${C.green}44`,
-              position: "relative",
-              overflow: "hidden",
+              marginTop: 16,
+              paddingTop: 16,
+              borderTop: `1px solid ${C.line}`,
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
             }}
           >
-            <div
-              style={{
-                position: "absolute",
-                top: -30,
-                right: -30,
-                width: 150,
-                height: 150,
-                background: `radial-gradient(circle, ${C.green}18, transparent 70%)`,
-                pointerEvents: "none",
-              }}
+            <Info
+              size={15}
+              style={{ color: C.green, flexShrink: 0, marginTop: 1 }}
             />
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 18,
-                position: "relative",
-              }}
-            >
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 14,
-                  background: "rgba(255,255,255,.05)",
-                  display: "grid",
-                  placeItems: "center",
-                }}
-              >
-                <Landmark size={20} style={{ color: "#fff" }} />
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  background: C.green + "1A",
-                  border: `1px solid ${C.green}33`,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: C.green,
-                    fontWeight: 700,
-                    letterSpacing: ".1em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Ən uyğun
-                </span>
-              </div>
-            </div>
-            <h3
-              style={{
-                fontSize: 18,
-                fontWeight: 600,
-                margin: "0 0 10px",
-                position: "relative",
-              }}
-            >
-              {best.name}
-            </h3>
-            <div
-              style={{
-                fontFamily: MONO,
-                fontVariantNumeric: "tabular-nums",
-                fontSize: isMobile ? 34 : 40,
-                fontWeight: 700,
-                color: "#fff",
-                lineHeight: 1,
-                marginBottom: 8,
-                position: "relative",
-              }}
-            >
-              <CountUp value={best.amount} />{" "}
-              <span style={{ fontSize: 20, color: C.dim }}>₼</span>
-            </div>
             <p
               style={{
-                fontSize: 13,
+                fontSize: 11.5,
                 color: C.dim,
-                margin: "0 0 18px",
-                fontFamily: MONO,
-                position: "relative",
+                lineHeight: 1.55,
+                margin: 0,
               }}
             >
-              {best.rate}%-dən · ~{fmt(monthlyPayment(best.amount, best.rate))}{" "}
-              ₼/ay · {TERM_MONTHS} ay
+              Biz kredit vermirik və kredit qərarı çıxarmırıq. Yalnız bankların
+              hər kəsə açıq (ictimai) tariflərini toplayıb sizin profilinizə
+              görə müqayisə edir və tövsiyə edirik. Hesablamalar tamamilə sizin
+              daxil etdiyiniz məlumatlara əsaslanır — real banka müraciət
+              edərkən bankın öz yoxlaması nəticəsində şərtlər fərqli ola bilər.
+              Bütün rəqəmlər təxminidir; yekun qərara və şərtlərə görə
+              məsuliyyət daşımırıq.
             </p>
-            <button
-              onClick={() => openBank(best)}
-              style={{
-                width: "100%",
-                background: "#ECE9E2",
-                color: "#161616",
-                border: "none",
-                padding: "15px",
-                borderRadius: 16,
-                fontSize: 12.5,
-                fontWeight: 700,
-                letterSpacing: ".08em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                position: "relative",
-              }}
-            >
-              Rəsmi sayta keç <ArrowUpRight size={15} />
-            </button>
           </div>
-        )}
+        </div>
 
-        {/* digər təkliflər */}
-        {rest.map((b, i) => (
-          <button
-            key={b.key}
-            onClick={() => openBank(b)}
-            style={{
-              ...card,
-              width: "100%",
-              padding: isMobile ? "16px 18px" : "18px 22px",
-              marginBottom: 10,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              cursor: "pointer",
-              textAlign: "left",
-              animation: `rise .4s ${i * 60}ms both`,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 14,
-                minWidth: 0,
-              }}
-            >
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  background: "rgba(255,255,255,.05)",
-                  display: "grid",
-                  placeItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Landmark size={18} style={{ color: C.dim }} />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 600,
-                    color: "#fff",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {b.name}
-                </div>
-                <div style={{ fontSize: 12, color: C.faint }}>
-                  {b.rate}%-dən
-                </div>
-              </div>
-            </div>
-            <div
-              style={{
-                fontFamily: MONO,
-                fontVariantNumeric: "tabular-nums",
-                fontSize: isMobile ? 20 : 24,
-                fontWeight: 700,
-                color: "#fff",
-                flexShrink: 0,
-              }}
-            >
-              {fmt(b.amount)}{" "}
-              <span style={{ fontSize: 13, color: C.dim }}>₼</span>
-            </div>
-          </button>
+        {/* faizi bilinən banklar — hamısı tam kart (AFB kimi) */}
+        {known.map((b, i) => (
+          <BankCard key={b.key} b={b} isBest={i === 0} />
         ))}
 
-        {/* disclaimer */}
+        {/* faizi təsdiqlənməyən banklar */}
+        {unknown.length > 0 && (
+          <>
+            <div style={{ ...eyebrow, margin: "18px 4px 12px" }}>
+              Digər banklar
+            </div>
+            {unknown.map((b) => (
+              <BankRow key={b.key} b={b} />
+            ))}
+          </>
+        )}
+
+        {/* disclaimer — hüquqi qoruma */}
         <p
           style={{
             fontSize: 11.5,
             color: C.faint,
             textAlign: "center",
-            lineHeight: 1.5,
+            lineHeight: 1.55,
             marginTop: 18,
-            maxWidth: 380,
+            maxWidth: 400,
             marginLeft: "auto",
             marginRight: "auto",
           }}
         >
-          Rəqəmlər açıq tariflərə əsaslanan proqnozdur. Dəqiq təklifi bank öz
-          saytında təsdiqləyir.
+          Bu, bankların açıq (ictimai) tariflərinə əsaslanan tövsiyədir — rəsmi
+          təklif və ya partnyorluq deyil. Rəqəmlər təxminidir; dəqiq şərtləri
+          bank öz saytında təsdiqləyir.
         </p>
       </div>
-
-      <style>{`@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-        @media (prefers-reduced-motion:reduce){[style*="rise"]{animation:none!important;opacity:1!important;transform:none!important}}`}</style>
     </div>
   );
 }
