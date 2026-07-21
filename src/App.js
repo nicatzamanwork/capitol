@@ -14,6 +14,7 @@ import RegisterPage from "./components/RegisterPage";
 import LoginPage from "./components/LoginPage";
 import LandingPage from "./components/LandingPage";
 import HomePage from "./components/Homepage";
+import GoalsPage from "./components/GoalsPage";
 
 // Internal Pages
 import IntelligencePage from "./components/IntelligencePage";
@@ -81,7 +82,7 @@ function AppContent() {
                 {<Route path="/overview" element={<HomePage />} />}
                 {/* <Route path="/accounts" element={<AccountsPage />} /> */}
                 <Route path="/advisor" element={<IntelligencePage />} />
-                {/* <Route path="/goals" element={<GoalsPage />} /> */}
+                {<Route path="/goals" element={<GoalsPage />} />}
                 {/* <Route path="/debts" element={<DebtsPage />} /> */}
                 <Route path="/eligibility" element={<EligibilityPage />} />
                 <Route path="*" element={<Navigate to="/overview" replace />} />

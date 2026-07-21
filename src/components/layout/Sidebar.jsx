@@ -1,12 +1,20 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { Home, BrainCircuit, CirclePoundSterling, LogOut } from "lucide-react";
+import {
+  Home,
+  BrainCircuit,
+  CirclePoundSterling,
+  LogOut,
+  GoalIcon,
+  
+} from "lucide-react";
 
 const GREEN = "#35D6A0";
 
 const menuItems = [
   { icon: Home, label: "Home", path: "/home" },
   { icon: BrainCircuit, label: "Advisor", path: "/advisor" },
+  { icon: GoalIcon, label: "Goals", path: "/goals" },
   { icon: CirclePoundSterling, label: "Eligibility", path: "/eligibility" },
 ];
 
