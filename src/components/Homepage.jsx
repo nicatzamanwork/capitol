@@ -27,7 +27,7 @@ const MOBILE_NAV_PAD = "calc(96px + env(safe-area-inset-bottom))";
 
 /* açıq tarif banklar (referral) — best rate & offers üçün */
 const BANKS = [
-  { name: "AFB Bank", rate: 11.5 },
+  { name: "AFB Bank", rate: 10.5 },
   { name: "ABB", rate: 12.0 },
   { name: "Bank Respublika", rate: 13.5 },
 ];
