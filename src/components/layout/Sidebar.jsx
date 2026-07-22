@@ -6,15 +6,14 @@ import {
   CirclePoundSterling,
   LogOut,
   GoalIcon,
-  
 } from "lucide-react";
 
 const GREEN = "#35D6A0";
 
 const menuItems = [
   { icon: Home, label: "Home", path: "/home" },
-  { icon: BrainCircuit, label: "Advisor", path: "/advisor" },
   { icon: GoalIcon, label: "Goals", path: "/goals" },
+  { icon: BrainCircuit, label: "Advisor", path: "/advisor" },
   { icon: CirclePoundSterling, label: "Eligibility", path: "/eligibility" },
 ];
 

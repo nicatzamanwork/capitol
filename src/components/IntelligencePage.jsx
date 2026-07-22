@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFinancial } from "../App";
 import { BrainCircuit, Send, RotateCcw, ArrowRight } from "lucide-react";
+import { askAdvisor } from "../askAdvisor";
 
 /* ── tokens ── */
 const C = {
@@ -11,8 +12,8 @@ const C = {
   bubbleUser: "#ECE9E2",
   line: "rgba(255,255,255,.07)",
   text: "#F3F4F5",
-  dim: "#868B94",
-  faint: "#4C525B",
+  dim: "#B0B6BF",
+  faint: "#858B94",
   green: "#35D6A0",
   amber: "#E7B24C",
   red: "#F26D6D",
@@ -184,7 +185,7 @@ function loadChat() {
 export default function IntelligencePage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const { updateFinancials } = useFinancial();
+  const { financialData, updateFinancials } = useFinancial();
 
   const [saved] = useState(loadChat);
   const [messages, setMessages] = useState(
@@ -193,6 +194,7 @@ export default function IntelligencePage() {
   const [qIndex, setQIndex] = useState(() => saved?.qIndex ?? 0);
   const [answers, setAnswers] = useState(() => saved?.answers ?? {});
   const [done, setDone] = useState(() => saved?.done ?? false);
+  const [sending, setSending] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
   const endRef = useRef(null);
@@ -242,7 +244,8 @@ export default function IntelligencePage() {
         addAI(
           `Hazırdır! Hazırlıq skorunuz ${res.score}/100 — ${LIKE[
             res.likelihood
-          ].label.toLowerCase()}. Nəticə Home səhifənizdə göründü.`
+          ].label.toLowerCase()}. Nəticə Home səhifənizdə göründü. İndi mənə istədiyinizi soruşa bilərsiniz — məsələn "limitimi necə artırım?"`,
+          { free: true }
         ),
       450
     );
@@ -325,9 +328,90 @@ export default function IntelligencePage() {
     advance(curQ.key, num, label ?? `${fmt(num)} ₼`);
   };
 
+  const matchChip = (raw) => {
+    const t = raw.trim().toLowerCase();
+    if (!t || !curQ.options) return null;
+    return (
+      curQ.options.find(
+        (o) => o.l.toLowerCase() === t || String(o.v).toLowerCase() === t
+      ) ||
+      curQ.options.find((o) => o.l.toLowerCase().includes(t)) ||
+      null
+    );
+  };
+
   const send = () => {
-    if (done || !inputValue.trim()) return;
-    if (curQ.type === "number") submitNumber(inputValue);
+    if (!inputValue.trim()) return;
+    if (done) {
+      sendFree();
+      return;
+    }
+    if (curQ.type === "number") {
+      submitNumber(inputValue);
+      return;
+    }
+    const m = matchChip(inputValue);
+    if (m) {
+      advance(curQ.key, m.v, m.l);
+    } else {
+      addUser(inputValue);
+      setInputValue("");
+      setTimeout(
+        () =>
+          addAI(
+            "Bu cavabı tanımadım. Yuxarıdakı seçimlərdən birini seçin və ya dəqiq yazın.",
+            { isError: true }
+          ),
+        300
+      );
+    }
+  };
+
+  // sərbəst AI söhbəti (5 sual bitəndən sonra)
+  const sendFree = async () => {
+    const q = inputValue.trim();
+    if (!q || sending) return;
+    setMessages((p) => [...p, { role: "user", text: q, free: true }]);
+    setInputValue("");
+    setSending(true);
+
+    // API-yə yalnız sərbəst söhbət mesajları gedir (bələdçi sualları yox)
+    const priorFree = messages
+      .filter((m) => m.free)
+      .map((m) => ({
+        role: m.role === "user" ? "user" : "assistant",
+        content: m.text,
+      }));
+    const apiMessages = [...priorFree, { role: "user", content: q }];
+
+    const income = financialData?.monthlyIncome ?? 0;
+    const context = {
+      monthlyIncome: financialData?.monthlyIncome,
+      monthlyDebtPayments: financialData?.monthlyDebtPayments,
+      dti:
+        income > 0
+          ? Math.round((financialData.monthlyDebtPayments / income) * 100)
+          : undefined,
+      computedLimit: financialData?.computedLimit,
+    };
+
+    try {
+      const reply = await askAdvisor(apiMessages, context);
+      setMessages((p) => [...p, { role: "ai", text: reply, free: true }]);
+      logEvent("advisor_chat", {});
+    } catch (e) {
+      setMessages((p) => [
+        ...p,
+        {
+          role: "ai",
+          text: e?.message || "Bağlantı xətası. Bir azdan yenidən cəhd edin.",
+          isError: true,
+          free: true,
+        },
+      ]);
+    } finally {
+      setSending(false);
+    }
   };
 
   const reset = () => {
@@ -521,50 +605,122 @@ export default function IntelligencePage() {
         }}
       >
         {done ? (
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              onClick={() => {
-                logEvent("go_to_eligibility");
-                navigate("/eligibility");
-              }}
+          <>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                onClick={() => {
+                  logEvent("go_to_eligibility");
+                  navigate("/eligibility");
+                }}
+                style={{
+                  background: C.green + "14",
+                  color: C.green,
+                  border: `1px solid ${C.green}33`,
+                  padding: "10px 16px",
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                }}
+              >
+                Bank təklifləri <ArrowRight size={15} />
+              </button>
+              <button
+                onClick={reset}
+                style={{
+                  background: "transparent",
+                  color: C.dim,
+                  border: `1px solid ${C.line}`,
+                  padding: "10px 16px",
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                }}
+              >
+                <RotateCcw size={14} /> Yenidən
+              </button>
+            </div>
+
+            {sending && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: C.faint,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 999,
+                    background: C.green,
+                    animation: "pulse 1s infinite",
+                  }}
+                />{" "}
+                Köməkçi yazır…
+              </div>
+            )}
+
+            {/* sərbəst söhbət inputu */}
+            <div
               style={{
-                flex: 1,
-                minWidth: 180,
-                background: C.bubbleUser,
-                color: "#161616",
-                border: "none",
-                padding: "15px",
-                borderRadius: 16,
-                fontSize: 14,
-                fontWeight: 700,
-                cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              }}
-            >
-              Bank təkliflərini gör <ArrowRight size={16} />
-            </button>
-            <button
-              onClick={reset}
-              style={{
-                background: "transparent",
-                color: C.dim,
+                background: "#0D0D0F",
                 border: `1px solid ${C.line}`,
-                padding: "15px 22px",
-                borderRadius: 16,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
+                borderRadius: 999,
+                padding: isMobile ? "8px 12px" : "10px 16px",
+                opacity: sending ? 0.6 : 1,
               }}
             >
-              <RotateCcw size={15} /> Yenidən
-            </button>
-          </div>
+              <input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && send()}
+                disabled={sending}
+                placeholder="Sualınızı yazın — məs. limitimi necə artırım?"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#fff",
+                  fontFamily: "inherit",
+                  fontSize: isMobile ? 16 : 14,
+                  padding: "4px 0",
+                }}
+              />
+              <button
+                onClick={send}
+                disabled={!inputValue.trim() || sending}
+                style={{
+                  padding: 8,
+                  borderRadius: 999,
+                  background: "#fff",
+                  color: "#000",
+                  border: "none",
+                  cursor: inputValue.trim() && !sending ? "pointer" : "default",
+                  opacity: inputValue.trim() && !sending ? 1 : 0.2,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Send size={11} />
+              </button>
+            </div>
+          </>
         ) : (
           <>
             <div
@@ -594,88 +750,95 @@ export default function IntelligencePage() {
             )}
 
             {curQ.type === "number" && (
-              <>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
-                  {curQ.quick.map((q) => {
-                    const v = typeof q === "object" ? q.v : q;
-                    const l = typeof q === "object" ? q.l : `${fmt(q)} ₼`;
-                    return (
-                      <button
-                        key={String(v)}
-                        style={chipMono}
-                        onClick={() => advance(curQ.key, v, l)}
-                      >
-                        {l}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
+                {curQ.quick.map((q) => {
+                  const v = typeof q === "object" ? q.v : q;
+                  const l = typeof q === "object" ? q.l : `${fmt(q)} ₼`;
+                  return (
+                    <button
+                      key={String(v)}
+                      style={chipMono}
+                      onClick={() => advance(curQ.key, v, l)}
+                    >
+                      {l}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* input — hər sualda görünür */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                background: "#0D0D0F",
+                border: `1px solid ${C.line}`,
+                borderRadius: 999,
+                padding: isMobile ? "8px 12px" : "10px 16px",
+              }}
+            >
+              <input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && send()}
+                inputMode={curQ.type === "number" ? "decimal" : "text"}
+                placeholder={
+                  curQ.type === "number"
+                    ? "Məbləği yazın…"
+                    : "Seçin və ya cavabı yazın…"
+                }
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#fff",
+                  fontFamily: curQ.type === "number" ? MONO : "inherit",
+                  fontVariantNumeric: "tabular-nums",
+                  fontSize: isMobile ? 16 : 14,
+                  padding: "4px 0",
+                }}
+              />
+              {curQ.type === "number" && (
+                <span
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    background: "#0D0D0F",
-                    border: `1px solid ${C.line}`,
+                    fontSize: 10,
+                    background: "rgba(255,255,255,.05)",
+                    border: "1px solid rgba(255,255,255,.1)",
+                    padding: "4px 10px",
                     borderRadius: 999,
-                    padding: isMobile ? "8px 12px" : "10px 16px",
+                    color: C.dim,
+                    marginRight: 8,
                   }}
                 >
-                  <input
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && send()}
-                    inputMode="decimal"
-                    placeholder="Məbləği yazın…"
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      background: "transparent",
-                      border: "none",
-                      outline: "none",
-                      color: "#fff",
-                      fontFamily: MONO,
-                      fontVariantNumeric: "tabular-nums",
-                      fontSize: isMobile ? 16 : 14,
-                      padding: "4px 0",
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: 10,
-                      background: "rgba(255,255,255,.05)",
-                      border: "1px solid rgba(255,255,255,.1)",
-                      padding: "4px 10px",
-                      borderRadius: 999,
-                      color: C.dim,
-                      marginRight: 8,
-                    }}
-                  >
-                    ₼
-                  </span>
-                  <button
-                    onClick={send}
-                    disabled={!inputValue.trim()}
-                    style={{
-                      padding: 8,
-                      borderRadius: 999,
-                      background: "#fff",
-                      color: "#000",
-                      border: "none",
-                      cursor: inputValue.trim() ? "pointer" : "default",
-                      opacity: inputValue.trim() ? 1 : 0.2,
-                      display: "grid",
-                      placeItems: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Send size={11} />
-                  </button>
-                </div>
-              </>
-            )}
+                  ₼
+                </span>
+              )}
+              <button
+                onClick={send}
+                disabled={!inputValue.trim()}
+                style={{
+                  padding: 8,
+                  borderRadius: 999,
+                  background: "#fff",
+                  color: "#000",
+                  border: "none",
+                  cursor: inputValue.trim() ? "pointer" : "default",
+                  opacity: inputValue.trim() ? 1 : 0.2,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Send size={11} />
+              </button>
+            </div>
           </>
         )}
       </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
     </div>
   );
 }
