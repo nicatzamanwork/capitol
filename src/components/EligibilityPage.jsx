@@ -8,6 +8,7 @@ import {
   Sparkles,
   Info,
 } from "lucide-react";
+import { logOfferClick } from "../logOfferClick";
 
 /* ── tokens ── */
 const C = {
@@ -164,6 +165,14 @@ export default function EligibilityPage() {
   const openBank = (bank) => {
     logEvent("offer_clicked", {
       bank_key: bank.key,
+      rate: bank.rate,
+      dti,
+      limit,
+    });
+    // Supabase-ə yaz (data toplama — hansı bank, DTI, limit)
+    logOfferClick({
+      bankKey: bank.key,
+      bankName: bank.name,
       rate: bank.rate,
       dti,
       limit,
