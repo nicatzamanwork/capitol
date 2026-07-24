@@ -53,7 +53,7 @@ function computeResult(income, debt) {
   return { dtiRatio, limit, status };
 }
 
-/* ── 5 sual (funksional, dizayna sadiq) ── */
+/* ── 7 sual (öhdəliklər ayrı-ayrı → dəqiq DTI) ── */
 const QUESTIONS = [
   {
     key: "income",
@@ -62,13 +62,33 @@ const QUESTIONS = [
     quick: [800, 1500, 3000],
   },
   {
-    key: "debt",
-    text: "Aylıq bütün öhdəlikləriniz nə qədərdir? (kredit, kart, icarə, aliment...)",
+    key: "loanPayment",
+    text: "Aylıq kredit ödənişləriniz nə qədərdir?",
     type: "number",
     quick: [
-      { v: 0, l: "Borcum yoxdur" },
+      { v: 0, l: "Kreditim yoxdur" },
+      { v: 200, l: "200 ₼" },
+      { v: 500, l: "500 ₼" },
+    ],
+  },
+  {
+    key: "cardObligation",
+    text: "Kredit kartı üzrə aylıq öhdəliyiniz nə qədərdir?",
+    type: "number",
+    quick: [
+      { v: 0, l: "Kartım yoxdur" },
+      { v: 100, l: "100 ₼" },
       { v: 300, l: "300 ₼" },
-      { v: 700, l: "700 ₼" },
+    ],
+  },
+  {
+    key: "otherObligation",
+    text: "Digər aylıq öhdəlikləriniz? (icarə, aliment, zaminlik...)",
+    type: "number",
+    quick: [
+      { v: 0, l: "Yoxdur" },
+      { v: 300, l: "300 ₼" },
+      { v: 600, l: "600 ₼" },
     ],
   },
   {
@@ -170,7 +190,7 @@ function useIsMobile(bp = 768) {
 }
 
 /* ── persistence ── */
-const CHAT_KEY = "capital_advisor";
+const CHAT_KEY = "capital_advisor_v2";
 const GREETING = {
   role: "ai",
   text: "Kredit hazırlığınızı hesablayaq — bir neçə qısa sual.",
@@ -222,10 +242,16 @@ export default function IntelligencePage() {
   const curQ = QUESTIONS[qIndex];
 
   const finish = (allAnswers) => {
-    const res = prescore(allAnswers);
+    // üç öhdəliyi topla → ümumi aylıq öhdəlik (DTI üçün)
+    const debt =
+      (allAnswers.loanPayment || 0) +
+      (allAnswers.cardObligation || 0) +
+      (allAnswers.otherObligation || 0);
+    const withDebt = { ...allAnswers, debt };
+    const res = prescore(withDebt);
     updateFinancials({
       monthlyIncome: allAnswers.income,
-      monthlyDebtPayments: allAnswers.debt,
+      monthlyDebtPayments: debt,
       computedLimit: res.eligibleLimit,
       eligibilityStatus:
         res.likelihood === "high"
