@@ -22,9 +22,10 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, "JetBrains Mono", monospace';
 const MOBILE_NAV_PAD = "calc(120px + env(safe-area-inset-bottom))";
 
 /* ── calc ── */
-const MAX_DTI = 0.45,
+const MAX_DTI = 0.4,
   TERM_MONTHS = 36,
-  ANNUAL_RATE = 0.14;
+  ANNUAL_RATE = 0.105,
+  LIVING_MIN = 400;
 const INCOME_MIN = 100,
   INCOME_MAX = 100000,
   DEBT_MAX_MULT = 5;
@@ -42,11 +43,12 @@ function logEvent(type, meta = {}) {
 }
 
 function computeResult(income, debt) {
-  const dtiRatio = income > 0 ? Math.round((debt / income) * 100) : 0;
-  const maxPayment = income * MAX_DTI - debt;
+  const freeIncome = Math.max(0, income - LIVING_MIN); // yaşayış minimumu (400 ₼) çıxılır
+  const dtiRatio = freeIncome > 0 ? Math.round((debt / freeIncome) * 100) : 0;
+  const maxPayment = freeIncome * MAX_DTI - debt; // bank həddi 40%
   const limit = maxPayment > 0 ? round100(maxPayment * PV) : 0;
   let status = "healthy";
-  if (dtiRatio > 45) status = "critical";
+  if (dtiRatio > 40) status = "critical";
   else if (dtiRatio > 30) status = "watch";
   return { dtiRatio, limit, status };
 }
@@ -55,13 +57,13 @@ function computeResult(income, debt) {
 const QUESTIONS = [
   {
     key: "income",
-    text: "Aylıq xalis gəliriniz nə qədərdir?",
+    text: "Aylıq ümumi gəliriniz nə qədərdir? (maaş + icarə + biznes, vergidən əvvəl)",
     type: "number",
     quick: [800, 1500, 3000],
   },
   {
     key: "debt",
-    text: "Aylıq borc ödənişiniz nə qədərdir? (kredit, kart və s.)",
+    text: "Aylıq bütün öhdəlikləriniz nə qədərdir? (kredit, kart, icarə, aliment...)",
     type: "number",
     quick: [
       { v: 0, l: "Borcum yoxdur" },
@@ -118,7 +120,7 @@ function prescore(a) {
   let score = 0;
   score +=
     { salary: 30, business: 20, pension: 20, informal: 8 }[a.incomeType] ?? 8;
-  score += base.dtiRatio <= 30 ? 30 : base.dtiRatio <= 45 ? 15 : 0;
+  score += base.dtiRatio <= 30 ? 30 : base.dtiRatio <= 40 ? 15 : 0;
   score += { lt6: 0, "6-12": 8, "1-3": 14, "3+": 20 }[a.tenure] ?? 8;
   score += { 0: 20, 1: 14, 2: 7, 3: 0 }[a.activeLoans] ?? 0;
   score = Math.max(0, Math.min(100, score));
@@ -136,7 +138,7 @@ function prescore(a) {
     factors.push({ good: false, text: "Qeyri-rəsmi gəlir — limit azalır" });
   if (base.dtiRatio <= 30)
     factors.push({ good: true, text: `DTI aşağıdır (${base.dtiRatio}%)` });
-  else if (base.dtiRatio > 45)
+  else if (base.dtiRatio > 40)
     factors.push({ good: false, text: `DTI yüksəkdir (${base.dtiRatio}%)` });
   if (a.tenure === "3+") factors.push({ good: true, text: "Uzun iş stajı" });
   else if (a.tenure === "lt6")
@@ -289,7 +291,7 @@ export default function IntelligencePage() {
         setTimeout(
           () =>
             addAI(
-              "Bu gəlir çox aşağı görünür. Aylıq xalis gəlirinizi yoxlayın.",
+              "Bu gəlir çox aşağı görünür. Aylıq ümumi gəlirinizi yoxlayın.",
               { isError: true }
             ),
           300

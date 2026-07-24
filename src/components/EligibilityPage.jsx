@@ -23,8 +23,9 @@ const C = {
 };
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, "JetBrains Mono", monospace';
 const MOBILE_NAV_PAD = "calc(96px + env(safe-area-inset-bottom))";
-const MAX_DTI = 0.45,
-  TERM_MONTHS = 36;
+const MAX_DTI = 0.4,
+  TERM_MONTHS = 36,
+  LIVING_MIN = 400;
 
 /* ══════════════════════════════════════════════════════════════
    BANK PAVİLYONU — TÖVSİYƏ / AÇIQ TARİF MODELİ
@@ -136,13 +137,14 @@ export default function EligibilityPage() {
   const analyzed = income > 0;
 
   const { dti, limit, status } = useMemo(() => {
-    const dtiRatio = income > 0 ? Math.round((debt / income) * 100) : 0;
-    const maxPayment = income * MAX_DTI - debt;
-    const r = 0.14 / 12;
+    const freeIncome = Math.max(0, income - LIVING_MIN); // yaşayış minimumu (400 ₼) çıxılır
+    const dtiRatio = freeIncome > 0 ? Math.round((debt / freeIncome) * 100) : 0;
+    const maxPayment = freeIncome * MAX_DTI - debt; // bank həddi 40%
+    const r = 0.105 / 12;
     const pv = (1 - Math.pow(1 + r, -TERM_MONTHS)) / r;
     const lim = maxPayment > 0 ? Math.round((maxPayment * pv) / 100) * 100 : 0;
     let st = "healthy";
-    if (dtiRatio > 45) st = "critical";
+    if (dtiRatio > 40) st = "critical";
     else if (dtiRatio > 30) st = "watch";
     return {
       dti: dtiRatio,
@@ -626,7 +628,7 @@ export default function EligibilityPage() {
             }}
           >
             <span>DTI {dti}%</span>
-            <span style={{ color: C.amber }}>bank həddi 45%</span>
+            <span style={{ color: C.amber }}>bank həddi 40%</span>
             <span>60%</span>
           </div>
 
